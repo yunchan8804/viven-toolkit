@@ -1,0 +1,38 @@
+{
+  "name": "viven-sdk-claude-toolkit",
+  "version": "1.0.0",
+  "description": "Claude Code development toolkit for Viven SDK Unity VR projects",
+  "main": "index.js",
+  "bin": {
+    "viven-toolkit": "./bin/cli.js",
+    "viven-sdk-claude-toolkit": "./bin/cli.js"
+  },
+  "scripts": {
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "keywords": [
+    "viven",
+    "sdk",
+    "claude",
+    "claude-code",
+    "unity",
+    "vr",
+    "xr",
+    "lua",
+    "toolkit"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/viven-sdk-claude-toolkit.git"
+  },
+  "files": [
+    "bin/",
+    "templates/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

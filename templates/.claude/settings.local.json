@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:wiki.viven.app)",
+      "WebFetch(domain:sdkdoc.viven.app)"
+    ]
+  }
+}
