@@ -154,6 +154,113 @@ end
 
 ---
 
+## Lua 전역 심볼 목록
+
+VivenLuaBehaviour에서 자동으로 제공되는 전역 심볼들입니다.
+
+### VIVEN SDK API
+```lua
+Player              -- 플레이어 API (Player.Mine, Player.Other)
+Room                -- 방 관리 API
+UI                  -- UI 제어 API
+XR                  -- XR/VR 컨트롤러 API
+HandTracking        -- 손 추적 햅틱 API
+VivenSystem         -- 시스템 API
+VivenUtil           -- 유틸리티 함수
+Web                 -- 웹 요청 API
+WebRequest          -- 웹 요청 유틸
+TextChat            -- 텍스트 채팅 API
+ScreenRecording     -- 화면 녹화 API
+Locale              -- 로케일/다국어 API
+DebugBridge         -- 디버그 출력
+```
+
+### VIVEN 컴포넌트
+```lua
+VObject                     -- 네트워크 오브젝트 기반
+VivenGrabbableModule        -- 잡기 가능 모듈
+VivenRigidbodyControlModule -- 물리 제어 모듈
+VivenCustomSyncView         -- 네트워크 동기화 뷰
+VivenRidableModule          -- 탑승 모듈
+VivenCustomAnimationModule  -- 커스텀 애니메이션
+OutlineModule               -- 아웃라인 효과
+VivenWebView                -- 웹뷰
+VivenLocalWebView           -- 로컬 웹뷰
+ElectronicBlackboard        -- 전자 칠판
+ECanvas                     -- VR 캔버스
+YoutubeViewer               -- 유튜브 뷰어
+VivenAudioEventInstance     -- FMOD 오디오 이벤트
+```
+
+### Unity 기본 타입
+```lua
+-- 오브젝트
+GameObject, Transform, Object
+
+-- 수학/물리
+Vector2, Vector3, Quaternion, Mathf
+Ray, RaycastHit, Physics, Rigidbody, Collider
+
+-- 시간/코루틴
+Time, WaitForSeconds, WaitForEndOfFrame
+WaitForFixedUpdate, WaitForSecondsRealtime
+WaitUntil, WaitWhile, Coroutine
+
+-- 렌더링
+Camera, Color, Material, Shader
+Renderer, MeshRenderer, SkinnedMeshRenderer
+Texture, Texture2D, RenderTexture
+Light, ParticleSystem, LineRenderer
+
+-- UI
+Canvas, CanvasGroup, Image, RawImage
+Button, Text, TMP_Text, TMP_InputField
+Slider, Toggle, Dropdown, ScrollRect
+
+-- 오디오
+AudioSource, AudioClip, AudioListener
+
+-- 애니메이션
+Animator, AnimationClip
+```
+
+### Input System
+```lua
+PlayerInput, Keyboard, Key, Mouse, Touchscreen, KeyCode
+```
+
+### NavMesh AI
+```lua
+NavMesh, NavMeshAgent, NavMeshObstacle, NavMeshPath
+```
+
+### JSON 직렬화
+```lua
+JsonUtility          -- Unity 기본
+JsonConvert          -- Newtonsoft.Json
+JToken, JObject, JArray, JProperty  -- Newtonsoft.Json.Linq
+```
+
+### DOTween
+```lua
+VivenTweenUtil       -- Tween 유틸리티
+LoopType             -- 루프 타입
+Ease                 -- 이징 함수
+```
+
+### Timeline
+```lua
+PlayableDirector     -- 타임라인 디렉터
+PlayableAsset        -- 재생 가능 에셋
+```
+
+### 네트워크 데이터
+```lua
+RPCSendOption        -- RPC 전송 옵션 (All, Others, Target)
+```
+
+---
+
 ## XR 손 추적 API
 
 ### 네임스페이스
@@ -167,13 +274,21 @@ FingerType = CS.TwentyOz.VivenSDK.Scripts.Core.Haptic.DataModels.SDKFingerType
 ### 손 추적 모드 확인
 ```lua
 local mode = XRHandAPI.GetHandTrackingMode()
+-- 반환값 (string):
 -- "None": 컨트롤러 모드
 -- "BHaptics": 비햅틱스 장갑 모드
+-- "OpenXR": OpenXR 손 추적 모드
+-- "ProfPark": ProfPark 손 추적 모드
+-- "ProfOh": ProfOh 손 추적 모드
 ```
 
 ### 강제 잡기
 ```lua
+-- ForceGrabHandTracking(grabbable, isLeft, isInteractable, isForce)
+-- isInteractable: 상호작용 가능 여부 (기본값: true)
+-- isForce: 강제 잡기 여부 (기본값: false)
 XRHandAPI.ForceGrabHandTracking(grabbableModule, isLeftHand)
+XRHandAPI.ForceGrabHandTracking(grabbableModule, isLeftHand, true, false)  -- 전체 파라미터
 ```
 
 ### Interactor 상태 확인
@@ -188,23 +303,59 @@ local count = InteractionAPI.GetVerifiedColsCount(grabbableModule)
 ### 컨트롤러 진동
 ```lua
 -- XR.StartControllerVibration(isLeftHand, intensity, duration)
-XR.StartControllerVibration(false, 0.6, 0.1) -- 오른손
+XR.StartControllerVibration(false, 0.6, 0.1) -- 오른손, 강도 0.6, 0.1초
 XR.StartControllerVibration(true, 0.1, 0.1)  -- 왼손
+
+-- 진동 중지
+XR.StopControllerVibration(false)  -- 오른손 정지
+XR.StopControllerVibration(true)   -- 왼손 정지
 ```
 
-### 비햅틱스 장갑 진동
+### 햅틱 장갑 - 진동 (Vibration)
 ```lua
--- HandTracking.CommandVibrationHaptic(intensity, duration, handedness, fingerType, isWaveform)
+-- CommandVibrationHaptic(intensity, duration, handType, finger, isHandVibration)
+-- isHandVibration: 햅틱 글러브 진동 여부
 HandTracking.CommandVibrationHaptic(0.09, 50, Handedness.Right, FingerType.Index, false)
 HandTracking.CommandVibrationHaptic(0.02, 50, Handedness.Left, FingerType.Thumb, false)
+
+-- 진동 중지
+HandTracking.StopVibrationHaptic(Handedness.Right)
+HandTracking.StopVibrationHaptic(Handedness.Left)
 ```
 
-### 손가락 타입
-- `FingerType.Thumb` - 엄지
-- `FingerType.Index` - 검지
-- `FingerType.Middle` - 중지
-- `FingerType.Ring` - 약지
-- `FingerType.Little` - 소지
+### 햅틱 장갑 - 힘 피드백 (Force)
+```lua
+-- CommandForceHaptic(intensity, bendValue, inward, handedness, fingerType)
+-- inward: true = 손가락 구부리기, false = 펴기
+HandTracking.CommandForceHaptic(0.5, 0.8, true, Handedness.Right, FingerType.Index)
+
+-- 힘 피드백 중지
+HandTracking.StopForceHaptic(Handedness.Right)
+```
+
+### 햅틱 장갑 - 온도 피드백 (Fever)
+```lua
+-- CommandFeverHaptic(temperature, duration, handedness)
+HandTracking.CommandFeverHaptic(38.5, 1000, Handedness.Right)  -- 38.5도, 1초
+
+-- 온도 피드백 중지
+HandTracking.StopFeverHaptic(Handedness.Right)
+```
+
+### 열거형 (Enum)
+```lua
+-- 손 방향
+Handedness = CS.TwentyOz.VivenSDK.Scripts.Core.Haptic.DataModels.SDKHandedness
+-- Handedness.Left, Handedness.Right
+
+-- 손가락 타입
+FingerType = CS.TwentyOz.VivenSDK.Scripts.Core.Haptic.DataModels.SDKFingerType
+-- FingerType.Thumb   - 엄지
+-- FingerType.Index   - 검지
+-- FingerType.Middle  - 중지
+-- FingerType.Ring    - 약지
+-- FingerType.Little  - 소지
+```
 
 ---
 
@@ -306,10 +457,10 @@ Assets/
 
 #### Room 속성 관리
 ```lua
--- Room 속성 설정
-Room.SetRoomProp("propName", value)
+-- Room 속성 설정 (주의: 값은 반드시 string 타입)
+Room.SetRoomProp("propName", "stringValue")
 
--- Room 속성 읽기
+-- Room 속성 읽기 (반환: string 또는 nil)
 local value = Room.GetRoomProp("propName")
 
 -- 권장 네이밍 컨벤션
@@ -328,6 +479,64 @@ end
 
 -- 플레이어 수
 local count = Room.CurrentRoomPlayers.Keys.Count
+```
+
+### VivenCustomSyncView 상세 패턴
+
+#### 기본 설정
+```lua
+-- SyncView는 VivenLuaBehaviour와 함께 사용됨
+-- Lua 스크립트에서 자동으로 SyncView 변수 제공
+
+-- 소유권 확인
+local isMine = SyncView.IsMine             -- 내 오브젝트인지
+local ownerId = SyncView.ControlUserId     -- 현재 소유자 ID
+
+-- 소유권 요청
+SyncView:RequestOwnership()
+```
+
+#### 동기화 테이블 사용
+```lua
+-- v_SyncTable: Update에서 동기화
+-- v_FixedSyncTable: FixedUpdate에서 동기화
+
+-- 데이터 전송 (소유자만 호출됨)
+function sendSyncUpdate()
+    return { health = currentHealth, score = currentScore }
+end
+
+-- 데이터 수신 (비소유자가 호출됨)
+function receiveSyncUpdate(data)
+    currentHealth = data[1]  -- health
+    currentScore = data[2]   -- score
+end
+
+-- FixedUpdate 동기화 (물리 데이터용)
+function sendSyncFixedUpdate()
+    return { posX = pos.x, posY = pos.y, posZ = pos.z }
+end
+
+function receiveSyncFixedUpdate(data)
+    targetPos = Vector3(data[1], data[2], data[3])
+end
+```
+
+#### 이벤트 콜백
+```lua
+-- SyncView 초기화 완료
+function onSyncViewInitialized(syncTable, fixedSyncTable)
+    Debug.Log("SyncView 초기화 완료")
+end
+
+-- 소유권 변경
+function onOwnershipChanged(isMine)
+    if isMine then
+        Debug.Log("소유권 획득")
+    else
+        Debug.Log("소유권 상실")
+    end
+end
 ```
 
 ### RPC (Remote Procedure Call) 시스템
@@ -506,13 +715,81 @@ Event.clearEventWithName("onGameStart")
 
 ### 현재 플레이어 정보
 ```lua
--- 현재 사용자 정보
-local myUserId = Player.Mine.UserID
-local myNickname = Player.Mine.Nickname
+-- 기본 정보
+local myUserId = Player.Mine.UserID        -- 유저 ID
+local myNickname = Player.Mine.Nickname    -- 닉네임
+local playMode = Player.Mine.PlayMode      -- "PC" | "XR" | "Mobile"
 
--- 플레이어 이동 제어
-Player.Mine.CharacterMoveLock = true  -- 이동 잠금
-Player.Mine.CharacterMoveLock = false -- 이동 해제
+-- 플레이어 데이터 테이블 가져오기
+local data = Player.Mine.GetPlayerData()
+-- data.nickname, data.userId, data.userTag
+
+-- 프로필 이미지 비동기 로드
+Player.Mine.GetPlayerProfileImage(function(isSuccess, texture)
+    if isSuccess then
+        -- texture 사용
+    end
+end)
+```
+
+### 캐릭터 컨트롤
+```lua
+-- Transform 접근
+local head = Player.Mine.CharacterHead           -- 머리 Transform
+local rightHand = Player.Mine.CharacterRightHand -- 오른손 Transform
+local leftHand = Player.Mine.CharacterLeftHand   -- 왼손 Transform
+
+-- Animator 접근
+local animator = Player.Mine.CharacterAnimator
+local controller = Player.Mine.CharacterAnimatorController
+
+-- CharacterController 접근
+local cc = Player.Mine.CharacterController
+```
+
+### 이동 제어
+```lua
+-- 이동 잠금
+Player.Mine.CharacterMoveLock = true   -- 이동/회전 잠금
+Player.Mine.CharacterMoveLock = false  -- 잠금 해제
+
+-- 속도 조절
+Player.Mine.MultiplyPlayerSpeed(2.0)   -- 2배 속도 (범위: 0.01 ~ 5)
+Player.Mine.ResetPlayerSpeed()         -- 속도 초기화
+
+-- 입력 추가
+Player.Mine.AddMoveInput(Vector2(1, 0))  -- 이동 입력
+Player.Mine.AddViewInput(Vector2(0, 1))  -- 시선 입력
+
+-- 순간이동
+Player.Mine.TeleportPlayer(Vector3(0, 0, 0), Quaternion.identity)
+
+-- 카메라 잠금
+-- VivenCameraLockMode: None (해제), Lock (잠금), HardLocked (강제 잠금)
+Player.Mine.SetCameraLock(VivenCameraLockMode.Lock)
+Player.Mine.SetCameraLock(VivenCameraLockMode.None)       -- 잠금 해제
+Player.Mine.SetCameraLock(VivenCameraLockMode.HardLocked) -- 강제 잠금
+```
+
+### 상호작용 제어
+```lua
+-- 앉기
+local sittable = targetObject:GetComponent("VivenSittable")
+Player.Mine.Sit(sittable)
+
+-- 잡기 시도 (비동기 - Task<bool> 반환)
+-- 파라미터: (grabbable, isLeft, isForce, interpolation)
+-- isLeft: 왼손 여부 (기본값: false = 오른손)
+-- isForce: 기존에 잡고있는 모듈을 놓게 할지 여부 (기본값: false)
+-- interpolation: Transform Interpolation 적용 (기본값: GrabInterpolation.All)
+local grabbable = targetObject:GetComponent("VivenGrabbableModule")
+local success = Player.Mine.TryGrab(grabbable, false, false, GrabInterpolation.All)
+
+-- 모든 상호작용 종료
+Player.Mine.EndAllInteractions()
+
+-- 아바타 변경 (프롬프트 표시)
+Player.Mine.ChangeAvatar("avatar-uuid-here")
 ```
 
 ### PlayerInfoService
@@ -525,18 +802,48 @@ local playerName = PlayerInfoService.GetName(playerId)
 
 ## UI API
 
-### 페이드 효과
+### 윈도우 제어
 ```lua
--- 페이드 인 (화면이 밝아짐)
-UI.FadeIn(duration, callback)
+-- 시스템 윈도우 열기
+UI.OpenHomeWindow()      -- 홈 윈도우
+UI.OpenRoomWindow()      -- 방 윈도우
+UI.OpenAvatarWindow()    -- 아바타 윈도우
+UI.OpenObjectWindow()    -- 오브젝트 윈도우
+UI.OpenFriendWindow()    -- 친구 윈도우
+UI.OpenSettingWindow()   -- 설정 윈도우
 
--- 페이드 아웃 (화면이 어두워짐)
-UI.FadeOut(duration, callback)
+-- 모든 윈도우 닫기
+UI.CloseAllWindow()
+```
+
+### 독(Dock) 제어
+```lua
+UI.OpenDock()   -- 독 열기
+UI.CloseDock()  -- 독 닫기
 ```
 
 ### 토스트 메시지
 ```lua
+-- 일반 메시지
 UI.ToastMessage("메시지 내용")
+UI.ToastMessage("메시지 내용", 5.0)  -- 5초간 표시
+
+-- 경고 메시지
+UI.ToastWarningMessage("경고 메시지")
+UI.ToastWarningMessage("경고 메시지", 5.0)
+```
+
+### 페이드 효과
+```lua
+-- 페이드 인 (화면이 밝아짐)
+UI.FadeIn(duration, function()
+    Debug.Log("페이드 인 완료")
+end)
+
+-- 페이드 아웃 (화면이 어두워짐)
+UI.FadeOut(duration, function()
+    Debug.Log("페이드 아웃 완료")
+end, true)  -- showBackgroundImage
 ```
 
 ---

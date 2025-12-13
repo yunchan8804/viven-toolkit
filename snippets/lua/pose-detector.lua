@@ -1,4 +1,7 @@
----손 포즈/제스처 감지 핸들러 템플릿
+--[[
+    pose-detector.lua
+    Force/Fever Haptic Templates
+]]
 
 --region Injection list
 local _INJECTED_ORDER = 0
@@ -8,151 +11,215 @@ local function checkInject(OBJECT)
     return OBJECT
 end
 
----@type GameObject
----@details 포즈 감지기 오브젝트
+local function NullableInject(OBJECT)
+    _INJECTED_ORDER = _INJECTED_ORDER + 1
+    if OBJECT == nil then
+        Debug.Log(_INJECTED_ORDER .. "th object is missing")
+    end
+    return OBJECT
+end
+
 poseDetectorObject = checkInject(poseDetectorObject)
-
----@type GameObject
----@details 방향 감지기 오브젝트 (선택)
-directionDetectorObject = checkInject(directionDetectorObject)
-
----@type string
----@details 게임 매니저 스크립트 이름
+directionDetectorObject = NullableInject(directionDetectorObject)
 gameManagerName = checkInject(gameManagerName)
 --endregion
 
 --region Variables
+local util = require "xlua.util"
 XRHandAPI = CS.TwentyOz.VivenSDK.ExperimentExtension.Scripts.API.Experiment.XRHandAPI
 InteractionAPI = CS.TwentyOz.VivenSDK.ExperimentExtension.Scripts.API.Experiment.InteractionAPI
+Handedness = CS.TwentyOz.VivenSDK.Scripts.Core.Haptic.DataModels.SDKHandedness
+FingerType = CS.TwentyOz.VivenSDK.Scripts.Core.Haptic.DataModels.SDKFingerType
 
----@type GameManager
 local gameManager = nil
-
----@type VivenPoseOrGestureInteraction
 local poseDetector = nil
-
----@type VivenPoseOrGestureInteraction
 local directionDetector = nil
-
----@type VivenGrabbableModule
 local grabbableModule = nil
-
----@type boolean
 local isPoseDetected = false
-
----@type boolean
 local isDirectionDetected = false
-
----@type boolean
 local isValidGrab = false
+local isLeftHand = false
 --endregion
 
---region Unity Lifecycle
 function awake()
     gameManager = self:GetLuaComponentInParent(gameManagerName)
     poseDetector = poseDetectorObject:GetComponent("VivenPoseOrGestureInteraction")
-    directionDetector = directionDetectorObject:GetComponent("VivenPoseOrGestureInteraction")
+    if directionDetectorObject then
+        directionDetector = directionDetectorObject:GetComponent("VivenPoseOrGestureInteraction")
+    end
     grabbableModule = self:GetComponent("VivenGrabbableModule")
 end
 
 function onEnable()
-    -- 포즈 감지 이벤트 등록
     poseDetector.onPoseOrGesturePerformed:AddListener(onPoseDetected)
     poseDetector.onPoseOrGestureEnded:AddListener(onPoseEnded)
-
-    -- 방향 감지 이벤트 등록
-    directionDetector.onPoseOrGesturePerformed:AddListener(onDirectionDetected)
-    directionDetector.onPoseOrGestureEnded:AddListener(onDirectionEnded)
+    if directionDetector then
+        directionDetector.onPoseOrGesturePerformed:AddListener(onDirectionDetected)
+        directionDetector.onPoseOrGestureEnded:AddListener(onDirectionEnded)
+    end
 end
 
 function onDisable()
-    -- 포즈 감지 이벤트 해제
     poseDetector.onPoseOrGesturePerformed:RemoveListener(onPoseDetected)
     poseDetector.onPoseOrGestureEnded:RemoveListener(onPoseEnded)
-
-    -- 방향 감지 이벤트 해제
-    directionDetector.onPoseOrGesturePerformed:RemoveListener(onDirectionDetected)
-    directionDetector.onPoseOrGestureEnded:RemoveListener(onDirectionEnded)
+    if directionDetector then
+        directionDetector.onPoseOrGesturePerformed:RemoveListener(onDirectionDetected)
+        directionDetector.onPoseOrGestureEnded:RemoveListener(onDirectionEnded)
+    end
+    StopAllHaptics()
 end
---endregion
 
---region Pose Events
 function onPoseDetected()
     isPoseDetected = true
-    Debug.Log("포즈 감지됨")
-
     checkValidGrab()
 end
 
 function onPoseEnded()
     isPoseDetected = false
     isValidGrab = false
-    Debug.Log("포즈 종료됨")
 end
 
 function onDirectionDetected()
     isDirectionDetected = true
-    Debug.Log("방향 감지됨")
-
     checkValidGrab()
 end
 
 function onDirectionEnded()
     isDirectionDetected = false
     isValidGrab = false
-    Debug.Log("방향 종료됨")
 end
---endregion
 
---region Validation
 function checkValidGrab()
-    -- 포즈와 방향이 모두 올바른 경우
-    if isPoseDetected and isDirectionDetected then
+    local directionOk = (directionDetector == nil) or isDirectionDetected
+    if isPoseDetected and directionOk then
         isValidGrab = true
-        Debug.Log("올바른 잡기 자세")
-
-        -- Interactor와 접촉 중이면 강제 잡기 시도
         if InteractionAPI.GetVerifiedColsCount(grabbableModule) > 0 then
-            XRHandAPI.ForceGrabHandTracking(grabbableModule, false) -- 오른손
+            -- ForceGrabHandTracking(grabbable, isLeft, isInteractable=true, isForce=false)
+            XRHandAPI.ForceGrabHandTracking(grabbableModule, isLeftHand)
         end
     end
 end
---endregion
 
---region Interaction Events
 function onGrab()
-    -- Hand Tracking 모드에서 올바른 포즈가 아니면 경고
     if XRHandAPI.GetHandTrackingMode() ~= "None" and not isValidGrab then
-        Debug.Log("올바르지 않은 잡기 자세")
-        -- 경고 UI 표시 등
+        PlayVibrationHaptic(0.2, 100, isLeftHand)
         return
     end
-
-    -- 정상 잡기 처리
-    if gameManager ~= nil then
-        gameManager.OnGrabObject()
-    end
+    PlayVibrationHaptic(0.5, 50, isLeftHand)
+    if gameManager ~= nil then gameManager.OnGrabObject() end
 end
 
 function onRelease()
     isValidGrab = false
+    if gameManager ~= nil then gameManager.OnReleaseObject() end
+end
 
-    if gameManager ~= nil then
-        gameManager.OnReleaseObject()
+--region Haptic - Vibration
+function PlayVibrationHaptic(intensity, duration, useLeftHand, fingerType)
+    fingerType = fingerType or FingerType.Index
+    local hand = useLeftHand and Handedness.Left or Handedness.Right
+    if XRHandAPI.GetHandTrackingMode() == "None" then
+        XR.StartControllerVibration(useLeftHand, intensity, duration / 1000)
+    else
+        HandTracking.CommandVibrationHaptic(intensity * 0.1, duration, hand, fingerType, false)
+    end
+end
+
+function StopVibrationHaptic(useLeftHand)
+    local hand = useLeftHand and Handedness.Left or Handedness.Right
+    if XRHandAPI.GetHandTrackingMode() == "None" then
+        XR.StopControllerVibration(useLeftHand)
+    else
+        HandTracking.StopVibrationHaptic(hand)
     end
 end
 --endregion
 
---region Public Functions
-function GetIsPoseDetected()
-    return isPoseDetected
+--region Haptic - Force
+function PlayForceHaptic(intensity, bendValue, inward, useLeftHand, fingerType)
+    if XRHandAPI.GetHandTrackingMode() == "None" then
+        XR.StartControllerVibration(useLeftHand, intensity * 0.5, 0.1)
+        return
+    end
+    local hand = useLeftHand and Handedness.Left or Handedness.Right
+    fingerType = fingerType or FingerType.Index
+    HandTracking.CommandForceHaptic(intensity, bendValue, inward, hand, fingerType)
 end
 
-function GetIsDirectionDetected()
-    return isDirectionDetected
+function PlayForceHapticAllFingers(intensity, bendValue, inward, useLeftHand)
+    local hand = useLeftHand and Handedness.Left or Handedness.Right
+    if XRHandAPI.GetHandTrackingMode() == "None" then
+        XR.StartControllerVibration(useLeftHand, intensity * 0.5, 0.2)
+        return
+    end
+    HandTracking.CommandForceHaptic(intensity, bendValue, inward, hand, FingerType.Thumb)
+    HandTracking.CommandForceHaptic(intensity, bendValue, inward, hand, FingerType.Index)
+    HandTracking.CommandForceHaptic(intensity, bendValue, inward, hand, FingerType.Middle)
+    HandTracking.CommandForceHaptic(intensity, bendValue, inward, hand, FingerType.Ring)
+    HandTracking.CommandForceHaptic(intensity, bendValue, inward, hand, FingerType.Little)
 end
 
-function GetIsValidGrab()
-    return isValidGrab
+function StopForceHaptic(useLeftHand)
+    if XRHandAPI.GetHandTrackingMode() ~= "None" then
+        local hand = useLeftHand and Handedness.Left or Handedness.Right
+        HandTracking.StopForceHaptic(hand)
+    end
 end
 --endregion
+
+--region Haptic - Fever
+function PlayFeverHaptic(temperature, duration, useLeftHand)
+    if XRHandAPI.GetHandTrackingMode() == "None" then
+        local intensity = math.abs(temperature - 36.5) / 10
+        XR.StartControllerVibration(useLeftHand, math.min(intensity, 1.0), duration / 1000)
+        return
+    end
+    local hand = useLeftHand and Handedness.Left or Handedness.Right
+    HandTracking.CommandFeverHaptic(temperature, duration, hand)
+end
+
+function PlayColdHaptic(duration, useLeftHand)
+    PlayFeverHaptic(20.0, duration, useLeftHand)
+end
+
+function PlayWarmHaptic(duration, useLeftHand)
+    PlayFeverHaptic(40.0, duration, useLeftHand)
+end
+
+function PlayHotHaptic(duration, useLeftHand)
+    PlayFeverHaptic(50.0, duration, useLeftHand)
+end
+
+function StopFeverHaptic(useLeftHand)
+    if XRHandAPI.GetHandTrackingMode() ~= "None" then
+        local hand = useLeftHand and Handedness.Left or Handedness.Right
+        HandTracking.StopFeverHaptic(hand)
+    end
+end
+--endregion
+
+--region Haptic Utility
+function StopAllHaptics()
+    StopVibrationHaptic(false)
+    StopVibrationHaptic(true)
+    StopForceHaptic(false)
+    StopForceHaptic(true)
+    StopFeverHaptic(false)
+    StopFeverHaptic(true)
+end
+
+function PlayGrabStartHaptic(useLeftHand)
+    PlayVibrationHaptic(0.3, 50, useLeftHand)
+    PlayForceHapticAllFingers(0.5, 0.6, true, useLeftHand)
+end
+
+function PlayGrabEndHaptic(useLeftHand)
+    StopForceHaptic(useLeftHand)
+    PlayVibrationHaptic(0.1, 30, useLeftHand)
+end
+--endregion
+
+function GetIsPoseDetected() return isPoseDetected end
+function GetIsDirectionDetected() return isDirectionDetected end
+function GetIsValidGrab() return isValidGrab end
+function SetHandedness(leftHand) isLeftHand = leftHand end
