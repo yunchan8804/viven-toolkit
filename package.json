@@ -1,6 +1,6 @@
 {
   "name": "viven-sdk-claude-toolkit",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Claude Code development toolkit for Viven SDK Unity VR projects",
   "main": "index.js",
   "bin": {
