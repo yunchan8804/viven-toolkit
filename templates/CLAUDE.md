@@ -848,6 +848,139 @@ end, true)  -- showBackgroundImage
 
 ---
 
+## ScreenRecording API (화면 녹화)
+
+PC 모드에서 화면과 오디오를 녹화하는 기능입니다. 내부적으로 AVPro Movie Capture 플러그인과 ffmpeg를 사용합니다.
+
+### 아키텍처
+```
+SDK API (Lua)
+    ↓
+ScreenRecording (TwentyOz.VivenSDK)
+    ↓
+VivenScreenCaptureManager (관리자)
+    ↓
+CaptureFromScreen (AVPro Movie Capture)
+    ↓
+ffmpeg.exe (비디오 인코딩)
+```
+
+### 기본 사용법
+```lua
+-- 녹화 시작
+ScreenRecording.StartRecording()
+
+-- 녹화 중단 (파일 브라우저로 저장 경로 선택)
+ScreenRecording.StopRecording()
+
+-- 일시정지
+ScreenRecording.PauseRecording()
+
+-- 재개
+ScreenRecording.ResumeRecording()
+```
+
+### 프레임 레이트 설정
+```lua
+-- 현재 프레임 레이트 확인
+local fps = ScreenRecording.GetFrameRate()
+
+-- 프레임 레이트 설정 (기본값: 30fps)
+ScreenRecording.SetFrameRate(60)
+```
+
+### 저장 경로 설정
+```lua
+-- 저장 경로와 파일명을 미리 지정하면 파일 브라우저 생략
+ScreenRecording.SetOutputPath("C:/Videos")
+ScreenRecording.SetOutputFileName("MyRecording")
+ScreenRecording.StartRecording()
+
+-- 현재 설정 확인
+local path = ScreenRecording.GetOutputPath()
+local fileName = ScreenRecording.GetOutputFileName()
+
+-- 경로 초기화 (녹화 완료 후 자동 호출됨)
+ScreenRecording.ClearOutputPaths()
+```
+
+### 오디오 입력 장치 설정
+```lua
+-- 현재 오디오 입력 장치 확인
+local currentDevice = ScreenRecording.GetCurrentAudioInputDevice()
+
+-- 오디오 입력 장치 변경
+-- 주의: Loopback 장치 사용 권장 (FMOD 오디오 녹음을 위해)
+ScreenRecording.SetAudioInputDevice("장치명")
+```
+
+### 녹화 설정 상세
+
+| 설정 | 기본값 | 설명 |
+|------|--------|------|
+| 프레임 레이트 | 30 fps | 1~120 fps 범위 |
+| 출력 형식 | MP4 (H.264) | ffmpeg으로 인코딩 |
+| 오디오 소스 | Microphone (Loopback) | 시스템 오디오 캡처 |
+| 임시 저장 위치 | OS 동영상 폴더 | MyVideos/Viven/ |
+
+### 저장 프로세스
+```
+1. 녹화 시작 → OS 동영상 폴더에 임시 저장
+2. 녹화 종료 → StopRecording() 호출
+3. 경로 미지정 시 → 파일 브라우저로 최종 경로 선택
+4. 경로 지정 시 → 지정된 경로로 직접 저장
+5. 임시 파일 → 최종 위치로 이동 (복사 아님)
+```
+
+### 제약사항
+
+**플랫폼 제한**:
+- **PC 모드 전용**: XR/Mobile 모드에서는 작동하지 않음
+- 플레이 모드 확인: `Player.Mine.PlayMode == "PC"`
+
+**오디오 제약**:
+- FMOD 사운드는 Unity AudioListener를 사용하지 않음
+- **Loopback 장치 필수**: 시스템 전체 오디오를 녹음
+- 마이크 입력도 함께 녹음됨
+
+### 사용 예제
+```lua
+local isRecording = false
+
+function ToggleRecording()
+    if isRecording then
+        ScreenRecording.StopRecording()
+        UI.ToastMessage("녹화가 종료되었습니다.")
+    else
+        -- PC 모드 확인
+        if Player.Mine.PlayMode ~= "PC" then
+            UI.ToastWarningMessage("PC 모드에서만 녹화할 수 있습니다.")
+            return
+        end
+
+        -- 60fps로 녹화 시작
+        ScreenRecording.SetFrameRate(60)
+        ScreenRecording.StartRecording()
+        UI.ToastMessage("녹화가 시작되었습니다.")
+    end
+    isRecording = not isRecording
+end
+
+-- 특정 경로에 자동 저장
+function StartAutoSaveRecording()
+    ScreenRecording.SetOutputPath("C:/MyProject/Recordings")
+    ScreenRecording.SetOutputFileName("Session_" .. os.date("%Y%m%d_%H%M%S"))
+    ScreenRecording.StartRecording()
+end
+```
+
+### 기술 스택
+- **AVPro Movie Capture v5.3.3**: 화면/오디오 캡처 플러그인
+- **ffmpeg.exe**: 비디오 인코딩 (H.264/H.265)
+- **SimpleFileBrowser**: 파일 저장 경로 선택 UI
+
+---
+
 ## 타입 정의 패턴 (def.lua)
 
 ### 타입 정의 파일 작성
@@ -931,6 +1064,7 @@ end
 - `/viven:rpc` - RPC 기반 멀티플레이어 시스템 설정
 - `/viven:room` - Room 속성 및 이벤트 가이드
 - `/viven:host-client` - Host-Client 아키텍처 가이드
+- `/viven:recording` - 화면 녹화 시스템 가이드
 
 ---
 
