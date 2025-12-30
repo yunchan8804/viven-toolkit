@@ -1,34 +1,78 @@
-# Viven SDK 프로젝트 개발 가이드
+# VIVEN SDK 개발 가이드
 
-이 프로젝트는 TwentyOz의 Viven SDK 기반 Unity VR 메타버스 애플리케이션입니다.
+TwentyOz의 VIVEN SDK 기반 Unity VR 메타버스 콘텐츠 개발을 위한 Claude Code 툴킷.
 
 ## 온라인 문서
 
 - **Wiki**: https://wiki.viven.app/developer
 - **API Reference**: https://sdkdoc.viven.app/api/SDK/TwentyOz.VivenSDK
 - **VObject 가이드**: https://wiki.viven.app/developer/contents/vobject
-- **Grabbable 가이드**: https://wiki.viven.app/developer/contents/grabbable
 - **Scripting 가이드**: https://wiki.viven.app/developer/dev-guide/viven-script
+
+---
+
+## Quick Start
+
+### 기본 스크립트 구조
+→ 참조: `snippets/lua/basic-script.lua`
+
+```lua
+--region Injection list
+local _ORDER = 0
+local function checkInject(o)
+    _ORDER = _ORDER + 1
+    assert(o, _ORDER .. "th object is missing")
+    return o
+end
+
+---@type GameObject
+local Target = checkInject(TargetObject)
+_ORDER = 0
+--endregion
+
+function awake()
+    -- GetComponent 캐싱
+end
+
+function start()
+    -- 초기화, 이벤트 등록
+end
+
+function onDestroy()
+    -- 이벤트 해제
+end
+```
+
+### 핵심 규칙 (3가지)
+1. **모든 외부 오브젝트는 `checkInject()`로 검증**
+2. **이벤트는 등록하면 반드시 해제** (`onDestroy`)
+3. **Host만 데이터 변경, Client는 시각화만**
+
+→ 상세 규칙: `rules/lua-style.md`
+
+---
+
+## 가이드 문서
+
+| 문서 | 설명 |
+|------|------|
+| `rules/lua-style.md` | Lua 코딩 스타일, 네이밍, 생명주기 |
+| `rules/network-patterns.md` | Host/Client, RPC, 동기화 테이블 |
+| `rules/common-errors.md` | 자주 발생하는 오류와 해결책 |
+
+---
 
 ## 핵심 아키텍처
 
-### 네임스페이스 구조
+### 컴포넌트 계층
 ```
-TwentyOz.VivenSDK                    # SDK 코어 API
-TwentyOz.VivenSDK.Scripts.Core.Lua   # Lua 바인딩
-Twoz.Viven.Interactions              # 상호작용 컴포넌트
-Twoz.Viven.HandTracking              # 손 추적 시스템
-```
-
-### 핵심 컴포넌트 계층
-```
-VObject (기반, 네트워크 동기화)
+VObject (네트워크 동기화 기반)
     ↓
 VivenGrabbableModule (잡기 가능)
-    + VivenRigidbodyControlModule (물리 제어)
-    + VivenGrabbableRigidView (네트워크 뷰)
+    + VivenRigidbodyControlModule
+    + VivenGrabbableRigidView
     ↓
-VivenLuaBehaviour (Lua 스크립트 실행)
+VivenLuaBehaviour (Lua 스크립트)
 ```
 
 ### 필수 컴포넌트 조합
@@ -36,1046 +80,169 @@ VivenLuaBehaviour (Lua 스크립트 실행)
 | 기능 | 필수 컴포넌트 |
 |------|--------------|
 | 네트워크 동기화 | VObject + VivenTransformView |
-| 잡기 가능 | VObject + VivenGrabbableModule + VivenRigidbodyControlModule + VivenGrabbableRigidView |
+| 잡기 가능 | VObject + VivenGrabbableModule + VivenRigidbodyControlModule |
 | 앉기 가능 | VObject + VivenSittable + Collider |
-| 탑승 가능 | VObject + VivenRidableModule + VivenCustomAnimationModule |
+
+### Host/Client 분리
+```
+Client (입력) → RPC → Host (판정) → RPC → All Clients (시각화)
+```
+→ 상세: `rules/network-patterns.md`
+→ 템플릿: `snippets/lua/multiplayer-template.lua`
 
 ---
 
-## Lua 스크립팅
+## 전역 API 요약
 
-### 의존성 주입 패턴 (필수)
+### 플레이어
 ```lua
---region Injection list
-local _INJECTED_ORDER = 0
-local function checkInject(OBJECT)
-    _INJECTED_ORDER = _INJECTED_ORDER + 1
-    assert(OBJECT, _INJECTED_ORDER .. "th object is missing")
-    return OBJECT
-end
-local function NullableInject(OBJECT)
-    _INJECTED_ORDER = _INJECTED_ORDER + 1
-    if OBJECT == nil then
-        Debug.Log(_INJECTED_ORDER .. "th object is missing")
-    end
-    return OBJECT
-end
-
----@type GameObject
----@details 설명
-TargetObject = checkInject(TargetObject)
---endregion
+Player.Mine.UserID              -- 내 유저 ID
+Player.Mine.Nickname            -- 닉네임
+Player.Mine.PlayMode            -- "PC" | "XR" | "Mobile"
+Player.Mine.TeleportPlayer(pos, rot)
+Player.Mine.CharacterMoveLock = true/false
 ```
+→ 상세: `snippets/lua/player-control.lua`
 
-### 생명주기 함수
+### 룸
 ```lua
-function awake()    -- 초기화 (GetComponent 호출)
-function start()    -- 시작 처리
-function onEnable() -- 이벤트 리스너 등록
-function onDisable() -- 이벤트 리스너 해제
-function update()    -- 프레임 업데이트
-function fixedUpdate() -- 물리 업데이트
+Room.SetRoomProp("key", "value")  -- 값은 반드시 string!
+Room.GetRoomProp("key")
+Room.LeaveRoom()
+Room.CurrentRoomPlayers
 ```
+→ 상세: `snippets/lua/room-control.lua`
 
-### 상호작용 이벤트
+### UI
 ```lua
-function onGrab()           -- 물체 잡음
-function onRelease()        -- 물체 놓음
-function onTriggerEnter(other) -- 트리거 진입
-function onTriggerExit(other)  -- 트리거 탈출
+UI.ToastMessage("메시지")
+UI.ToastWarningMessage("경고")
+UI.FadeIn(duration, callback)
+UI.FadeOut(duration, callback)
+UI.OpenDock() / UI.CloseDock()
 ```
+→ 상세: `snippets/lua/ui-control.lua`
 
-### 컴포넌트 접근
+### XR
 ```lua
--- C# 컴포넌트 가져오기
-local grabbable = self:GetComponent("VivenGrabbableModule")
-local rigidbody = self:GetComponent("VivenRigidbodyControlModule")
-
--- Lua 스크립트 가져오기
-local manager = self:GetLuaComponent("GameManager")
-local child = self:GetLuaComponentInChildren("ChildScript")
-local parent = self:GetLuaComponentInParent("ParentScript")
-
--- 외부 오브젝트 컴포넌트
-local comp = targetObject:GetComponent("ComponentName")
-local luaComp = targetObject:GetLuaComponent("ScriptName")
-
--- 타입 지정 컴포넌트
-local mesh = self:GetComponentInChildren(typeof(MeshRenderer))
-local colliders = self:GetComponentsInChildren(typeof(CS.UnityEngine.Collider))
+XR.IsXRMode()
+XR.StartControllerVibration(isLeft, amplitude, duration)
+XR.StopControllerVibration(isLeft)
 ```
+→ 상세: `snippets/lua/xr-control.lua`
 
-### 이벤트 리스너 등록/해제
+### EventBus
 ```lua
-function onEnable()
-    grabbableModule.onGrabEvent:AddListener(onGrab)
-    grabbableModule.onReleaseEvent:AddListener(onRelease)
-    poseDetector.onPoseOrGesturePerformed:AddListener(onPoseDetected)
-end
-
-function onDisable()
-    grabbableModule.onGrabEvent:RemoveListener(onGrab)
-    grabbableModule.onReleaseEvent:RemoveListener(onRelease)
-    poseDetector.onPoseOrGesturePerformed:RemoveListener(onPoseDetected)
-end
-```
-
-### 모듈 가져오기
-```lua
--- xlua 유틸리티 (코루틴 등)
-local util = require 'xlua.util'
-
--- Lua 스크립트 모듈 가져오기
-MyCallback = ImportLuaScript(EventCallbacks)
-IStep = ImportLuaScript(IStep)
-```
-
-### 코루틴 사용
-```lua
-local util = require 'xlua.util'
-
-local routine = nil
-
-function startRoutine()
-    routine = self:StartCoroutine(util.cs_generator(function()
-        coroutine.yield(WaitForSeconds(1.0))
-        -- 1초 후 실행
-        Debug.Log("1초 경과")
-    end))
-end
-
-function stopRoutine()
-    if routine ~= nil then
-        self:StopCoroutine(routine)
-        routine = nil
-    end
-end
+Util.EventBus:registerEvent("eventName", handler)
+Util.EventBus:invokeEvent("eventName", data)
+Util.EventBus:unregisterEvent("eventName", handler)  -- 필수!
 ```
 
 ---
 
-## Lua 전역 심볼 목록
+## 템플릿 (복붙용)
 
-VivenLuaBehaviour에서 자동으로 제공되는 전역 심볼들입니다.
-
-### VIVEN SDK API
-```lua
-Player              -- 플레이어 API (Player.Mine, Player.Other)
-Room                -- 방 관리 API
-UI                  -- UI 제어 API
-XR                  -- XR/VR 컨트롤러 API
-HandTracking        -- 손 추적 햅틱 API
-VivenSystem         -- 시스템 API
-VivenUtil           -- 유틸리티 함수
-Web                 -- 웹 요청 API
-WebRequest          -- 웹 요청 유틸
-TextChat            -- 텍스트 채팅 API
-ScreenRecording     -- 화면 녹화 API
-Locale              -- 로케일/다국어 API
-DebugBridge         -- 디버그 출력
-```
-
-### VIVEN 컴포넌트
-```lua
-VObject                     -- 네트워크 오브젝트 기반
-VivenGrabbableModule        -- 잡기 가능 모듈
-VivenRigidbodyControlModule -- 물리 제어 모듈
-VivenCustomSyncView         -- 네트워크 동기화 뷰
-VivenRidableModule          -- 탑승 모듈
-VivenCustomAnimationModule  -- 커스텀 애니메이션
-OutlineModule               -- 아웃라인 효과
-VivenWebView                -- 웹뷰
-VivenLocalWebView           -- 로컬 웹뷰
-ElectronicBlackboard        -- 전자 칠판
-ECanvas                     -- VR 캔버스
-YoutubeViewer               -- 유튜브 뷰어
-VivenAudioEventInstance     -- FMOD 오디오 이벤트
-```
-
-### Unity 기본 타입
-```lua
--- 오브젝트
-GameObject, Transform, Object
-
--- 수학/물리
-Vector2, Vector3, Quaternion, Mathf
-Ray, RaycastHit, Physics, Rigidbody, Collider
-
--- 시간/코루틴
-Time, WaitForSeconds, WaitForEndOfFrame
-WaitForFixedUpdate, WaitForSecondsRealtime
-WaitUntil, WaitWhile, Coroutine
-
--- 렌더링
-Camera, Color, Material, Shader
-Renderer, MeshRenderer, SkinnedMeshRenderer
-Texture, Texture2D, RenderTexture
-Light, ParticleSystem, LineRenderer
-
--- UI
-Canvas, CanvasGroup, Image, RawImage
-Button, Text, TMP_Text, TMP_InputField
-Slider, Toggle, Dropdown, ScrollRect
-
--- 오디오
-AudioSource, AudioClip, AudioListener
-
--- 애니메이션
-Animator, AnimationClip
-```
-
-### Input System
-```lua
-PlayerInput, Keyboard, Key, Mouse, Touchscreen, KeyCode
-```
-
-### NavMesh AI
-```lua
-NavMesh, NavMeshAgent, NavMeshObstacle, NavMeshPath
-```
-
-### JSON 직렬화
-```lua
-JsonUtility          -- Unity 기본
-JsonConvert          -- Newtonsoft.Json
-JToken, JObject, JArray, JProperty  -- Newtonsoft.Json.Linq
-```
-
-### DOTween
-```lua
-VivenTweenUtil       -- Tween 유틸리티
-LoopType             -- 루프 타입
-Ease                 -- 이징 함수
-```
-
-### Timeline
-```lua
-PlayableDirector     -- 타임라인 디렉터
-PlayableAsset        -- 재생 가능 에셋
-```
-
-### 네트워크 데이터
-```lua
-RPCSendOption        -- RPC 전송 옵션 (All, Others, Target)
-```
-
----
-
-## XR 손 추적 API
-
-### 네임스페이스
-```lua
-XRHandAPI = CS.TwentyOz.VivenSDK.ExperimentExtension.Scripts.API.Experiment.XRHandAPI
-InteractionAPI = CS.TwentyOz.VivenSDK.ExperimentExtension.Scripts.API.Experiment.InteractionAPI
-Handedness = CS.TwentyOz.VivenSDK.Scripts.Core.Haptic.DataModels.SDKHandedness
-FingerType = CS.TwentyOz.VivenSDK.Scripts.Core.Haptic.DataModels.SDKFingerType
-```
-
-### 손 추적 모드 확인
-```lua
-local mode = XRHandAPI.GetHandTrackingMode()
--- 반환값 (string):
--- "None": 컨트롤러 모드
--- "BHaptics": 비햅틱스 장갑 모드
--- "OpenXR": OpenXR 손 추적 모드
--- "ProfPark": ProfPark 손 추적 모드
--- "ProfOh": ProfOh 손 추적 모드
-```
-
-### 강제 잡기
-```lua
--- ForceGrabHandTracking(grabbable, isLeft, isInteractable, isForce)
--- isInteractable: 상호작용 가능 여부 (기본값: true)
--- isForce: 강제 잡기 여부 (기본값: false)
-XRHandAPI.ForceGrabHandTracking(grabbableModule, isLeftHand)
-XRHandAPI.ForceGrabHandTracking(grabbableModule, isLeftHand, true, false)  -- 전체 파라미터
-```
-
-### Interactor 상태 확인
-```lua
-local count = InteractionAPI.GetVerifiedColsCount(grabbableModule)
-```
-
----
-
-## 햅틱 피드백
-
-### 컨트롤러 진동
-```lua
--- XR.StartControllerVibration(isLeftHand, intensity, duration)
-XR.StartControllerVibration(false, 0.6, 0.1) -- 오른손, 강도 0.6, 0.1초
-XR.StartControllerVibration(true, 0.1, 0.1)  -- 왼손
-
--- 진동 중지
-XR.StopControllerVibration(false)  -- 오른손 정지
-XR.StopControllerVibration(true)   -- 왼손 정지
-```
-
-### 햅틱 장갑 - 진동 (Vibration)
-```lua
--- CommandVibrationHaptic(intensity, duration, handType, finger, isHandVibration)
--- isHandVibration: 햅틱 글러브 진동 여부
-HandTracking.CommandVibrationHaptic(0.09, 50, Handedness.Right, FingerType.Index, false)
-HandTracking.CommandVibrationHaptic(0.02, 50, Handedness.Left, FingerType.Thumb, false)
-
--- 진동 중지
-HandTracking.StopVibrationHaptic(Handedness.Right)
-HandTracking.StopVibrationHaptic(Handedness.Left)
-```
-
-### 햅틱 장갑 - 힘 피드백 (Force)
-```lua
--- CommandForceHaptic(intensity, bendValue, inward, handedness, fingerType)
--- inward: true = 손가락 구부리기, false = 펴기
-HandTracking.CommandForceHaptic(0.5, 0.8, true, Handedness.Right, FingerType.Index)
-
--- 힘 피드백 중지
-HandTracking.StopForceHaptic(Handedness.Right)
-```
-
-### 햅틱 장갑 - 온도 피드백 (Fever)
-```lua
--- CommandFeverHaptic(temperature, duration, handedness)
-HandTracking.CommandFeverHaptic(38.5, 1000, Handedness.Right)  -- 38.5도, 1초
-
--- 온도 피드백 중지
-HandTracking.StopFeverHaptic(Handedness.Right)
-```
-
-### 열거형 (Enum)
-```lua
--- 손 방향
-Handedness = CS.TwentyOz.VivenSDK.Scripts.Core.Haptic.DataModels.SDKHandedness
--- Handedness.Left, Handedness.Right
-
--- 손가락 타입
-FingerType = CS.TwentyOz.VivenSDK.Scripts.Core.Haptic.DataModels.SDKFingerType
--- FingerType.Thumb   - 엄지
--- FingerType.Index   - 검지
--- FingerType.Middle  - 중지
--- FingerType.Ring    - 약지
--- FingerType.Little  - 소지
-```
-
----
-
-## IStep 게임 플로우 패턴
-
-타임라인 기반 단계별 진행 시스템:
-
-```lua
-IStep = ImportLuaScript(IStep)
-
--- IStep 인스턴스 생성
-local step1 = IStep:new(
-    { activeObj1, activeObj2 },     -- 활성화할 오브젝트
-    { inactiveObj1, inactiveObj2 }, -- 비활성화할 오브젝트
-    0.0,                            -- 타임라인 시간
-    1,                              -- 스텝 번호
-    "cutComplete",                  -- 클리어 조건
-    { onStepStartFunc },            -- 시작 콜백
-    { onStepResetFunc },            -- 리셋 콜백
-    { onStepSkipFunc }              -- 스킵 콜백
-)
-
--- 매개변수가 있는 콜백
-local step2 = IStep:new(
-    nil, nil, 5.0, 2, "grabComplete",
-    { { myFunction, param1, param2 } }, -- {함수, 매개변수1, 매개변수2}
-    nil, nil
-)
-```
-
-### IStep 메서드
-- `step:OnStepStart()` - 스텝 시작 (오브젝트 활성화/비활성화 + 콜백 실행)
-- `step:OnStepClear()` - 스텝 완료
-- `step:OnStepReset()` - 스텝 리셋
-- `step:OnStepSkip()` - 스텝 스킵
-
----
-
-## 개발 규칙
-
-### Lua 스크립트 작성 규칙
-1. 항상 `checkInject` 패턴으로 의존성 주입
-2. `---@type` 타입 어노테이션 사용
-3. `onEnable`에서 이벤트 등록, `onDisable`에서 해제
-4. 지역 변수는 `local` 키워드 사용
-5. 리전 주석 (`--region`, `--endregion`) 으로 코드 구조화
-
-### 컴포넌트 접근 규칙
-1. `awake()`에서 모든 GetComponent 호출
-2. `start()`에서 초기 설정 수행
-3. Rigidbody 직접 접근 금지 → `VivenRigidbodyControlModule` 사용
-
-### 네트워크 규칙
-1. VObject의 `objectId`는 자동 생성됨
-2. `contentType`: Prepared (맵과 함께 로드)
-3. `objectSyncType`: Continuous (지속적 동기화)
+| 파일 | 용도 |
+|------|------|
+| `snippets/lua/multiplayer-template.lua` | Host/Client RPC 전체 구조 |
+| `snippets/lua/ui-panel-template.lua` | UI 패널 (Show/Hide/Refresh) |
+| `snippets/lua/sync-data-template.lua` | 동기화 테이블 (isDirty/캐시) |
+| `snippets/lua/basic-script.lua` | 기본 스크립트 구조 |
 
 ---
 
 ## 슬래시 커맨드
 
-- `/viven:init` - 새 Viven 오브젝트 초기화
+### 초기화/생성
+- `/viven:init` - 새 VObject 초기화
 - `/viven:lua-script` - Lua 스크립트 생성
 - `/viven:grabbable` - Grabbable 오브젝트 설정
 - `/viven:component` - 컴포넌트 추가 가이드
+
+### 네트워크
 - `/viven:network` - 네트워크 동기화 설정
-- `/viven:step` - IStep 기반 게임 플로우 생성
+- `/viven:rpc` - RPC 시스템 설정
+- `/viven:room` - Room 속성/이벤트 가이드
+- `/viven:host-client` - Host-Client 아키텍처
+
+### 템플릿 생성
+- `/viven:multiplayer` - Host/Client 템플릿
+- `/viven:ui-panel` - UI 패널 템플릿
+- `/viven:sync-data` - 동기화 테이블 템플릿
+
+### 기타
+- `/viven:xr` - XR/VR 컨트롤러 가이드
+- `/viven:player-input` - 플레이어 입력 제어
+- `/viven:recording` - 화면 녹화 시스템
+- `/viven:step` - IStep 게임 플로우
 - `/viven:docs [topic]` - 온라인 문서 조회
 - `/viven:troubleshoot` - 문제 해결 가이드
 
 ---
 
-## 프로젝트 구조
+## 자주 하는 실수
+
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| "nth object is missing" | Inspector 연결 누락 | 오브젝트 드래그 연결 |
+| RPC 호출 안 됨 | 함수가 local | 전역 함수로 변경 |
+| Room 속성 저장 안 됨 | string 아닌 값 | `tostring()` 사용 |
+| 이벤트 중복 호출 | 해제 누락 | `onDestroy`에서 해제 |
+| 동기화 데이터 nil | nil strip | 배열 또는 JSON 사용 |
+
+→ 상세: `rules/common-errors.md`
+
+---
+
+## API 변경 이력
+
+### Deprecated (사용 지양)
+| API | 대체 방안 |
+|-----|----------|
+| `UI.SetUIMode(bool)` | 지원 중단 |
+| `Player.Mine.PlayEmote()` | `SDKCustomAnimationModule` 사용 |
+
+### 신규 API (2025-12)
+| API | 설명 |
+|-----|------|
+| `Player.Mine.AddMoveInput(Vector2)` | 이동 입력 |
+| `Player.Mine.AddViewInput(Vector2)` | 시선 입력 |
+| `Room.LeaveRoom()` | 방 나가기 |
+| `UI.OpenDock()` / `CloseDock()` | 독 제어 |
+| `XR.StartControllerVibration()` | VR 진동 |
+
+---
+
+## 파일 구조
 
 ```
-Assets/
-├── TwentyOz/
-│   ├── VivenSDK/           # SDK 코어
-│   │   ├── Scripts/Core/   # C# 코어 스크립트
-│   │   └── Client/         # 클라이언트 컴포넌트
-│   └── Settings/           # 품질/렌더링 설정
-├── [ProjectName]/
-│   ├── Scripts/            # Lua 스크립트
-│   │   ├── Manager/        # 게임 매니저
-│   │   ├── Objects/        # 상호작용 오브젝트
-│   │   ├── UI/             # UI 스크립트
-│   │   └── Utils/          # 유틸리티
-│   ├── Prefabs/            # 프리팹
-│   ├── Scenes/             # 씬 파일
-│   └── Models/             # 3D 모델
-└── Plugins/                # 외부 플러그인
+viven-sdk-claude-toolkit/
+├── CLAUDE.md              ← 이 파일 (핵심 개요)
+├── rules/
+│   ├── lua-style.md       ← Lua 코딩 규칙
+│   ├── network-patterns.md ← 네트워크 패턴
+│   └── common-errors.md   ← 오류 해결
+├── snippets/lua/          ← 코드 스니펫
+│   ├── basic-script.lua
+│   ├── multiplayer-template.lua
+│   ├── ui-panel-template.lua
+│   ├── sync-data-template.lua
+│   ├── player-control.lua
+│   ├── room-control.lua
+│   ├── xr-control.lua
+│   ├── ui-control.lua
+│   └── ...
+├── generated/             ← 자동 생성 (API 참조)
+└── scripts/               ← 동기화 스크립트
 ```
 
 ---
 
-## 네트워크 멀티플레이어 시스템
-
-### Room 관련 API
-
-#### Room 속성 관리
-```lua
--- Room 속성 설정 (주의: 값은 반드시 string 타입)
-Room.SetRoomProp("propName", "stringValue")
-
--- Room 속성 읽기 (반환: string 또는 nil)
-local value = Room.GetRoomProp("propName")
-
--- 권장 네이밍 컨벤션
--- Host_[카테고리]_[속성명] (예: Host_Time_CurrentRound)
--- [playerId]_[속성명] (예: abc123_Mana)
--- Lobby_[속성명] (예: Lobby_HostId)
-```
-
-#### Room 플레이어 접근
-```lua
--- 현재 방의 모든 플레이어 목록
-for playerId, userInfo in pairs(Room.CurrentRoomPlayers) do
-    local userData = userInfo --[[@as UserData]]
-    local name = userData.userId
-end
-
--- 플레이어 수
-local count = Room.CurrentRoomPlayers.Keys.Count
-```
-
-### VivenCustomSyncView 상세 패턴
-
-#### 기본 설정
-```lua
--- SyncView는 VivenLuaBehaviour와 함께 사용됨
--- Lua 스크립트에서 자동으로 SyncView 변수 제공
-
--- 소유권 확인
-local isMine = SyncView.IsMine             -- 내 오브젝트인지
-local ownerId = SyncView.ControlUserId     -- 현재 소유자 ID
-
--- 소유권 요청
-SyncView:RequestOwnership()
-```
-
-#### 동기화 테이블 사용
-```lua
--- v_SyncTable: Update에서 동기화
--- v_FixedSyncTable: FixedUpdate에서 동기화
-
--- 데이터 전송 (소유자만 호출됨)
-function sendSyncUpdate()
-    return { health = currentHealth, score = currentScore }
-end
-
--- 데이터 수신 (비소유자가 호출됨)
-function receiveSyncUpdate(data)
-    currentHealth = data[1]  -- health
-    currentScore = data[2]   -- score
-end
-
--- FixedUpdate 동기화 (물리 데이터용)
-function sendSyncFixedUpdate()
-    return { posX = pos.x, posY = pos.y, posZ = pos.z }
-end
-
-function receiveSyncFixedUpdate(data)
-    targetPos = Vector3(data[1], data[2], data[3])
-end
-```
-
-#### 이벤트 콜백
-```lua
--- SyncView 초기화 완료
-function onSyncViewInitialized(syncTable, fixedSyncTable)
-    Debug.Log("SyncView 초기화 완료")
-end
-
--- 소유권 변경
-function onOwnershipChanged(isMine)
-    if isMine then
-        Debug.Log("소유권 획득")
-    else
-        Debug.Log("소유권 상실")
-    end
-end
-```
-
-### RPC (Remote Procedure Call) 시스템
-
-#### VivenCustomSyncView 컴포넌트 사용
-```lua
--- RPC 컴포넌트 가져오기
-local syncView = gameObject:GetComponent("VivenCustomSyncView")
-
--- 전송 옵션
-local RPCSendOption = {
-    All = 0,          -- 모든 플레이어에게 전송
-    Others = 1,       -- 나를 제외한 모든 플레이어
-    Target = 2,       -- 특정 플레이어에게만
-}
-
--- 모든 플레이어에게 RPC 전송
-syncView:SendRPC("FunctionName", RPCSendOption.All, { param1, param2 })
-
--- 특정 플레이어에게 RPC 전송
-syncView:SendTargetRPC("FunctionName", { targetPlayerId }, { param1, param2 })
-```
-
-#### RPC 수신 함수 정의
-```lua
--- RPC로 호출될 함수 정의
-function OnRPCReceived(functionName, messageId, mode, senderId, serializedParams)
-    Debug.Log("RPC 수신: " .. functionName .. " from " .. senderId)
-end
-```
-
-### 신뢰성 있는 RPC 시스템
-
-#### RPC 모듈 초기화
-```lua
-local rpclib = ImportLuaScript(RpcLibrary)
----@type RPC
-local rpc = rpclib.CreateRPC(targetBehavior, rpcComponent, Player.Mine.UserID, debugEnabled)
-```
-
-#### 신뢰성 있는 메시지 전송
-```lua
--- 모든 플레이어에게 신뢰성 있는 RPC 전송
-rpc:SendReliable("FunctionName", RPCSendOption.All, nil, { param1, param2 }, callback, timeout)
-
--- 특정 플레이어에게 전송
-rpc:SendReliable("FunctionName", RPCSendOption.Target, { targetId }, { params }, callback)
-
--- 브로드캐스트 (신뢰성 있음)
-rpc:Broadcast("FunctionName", { params }, true, callback)
-
--- 비신뢰성 메시지 전송 (빠르지만 전달 보장 없음)
-rpc:SendUnreliable("FunctionName", RPCSendOption.All, nil, { params })
-```
-
-### Host-Client 아키텍처
-
-#### Host 역할 확인
-```lua
--- SyncView에서 호스트 확인
-local isHost = SyncView.IsMine
-local hostId = SyncView.MotherObject.ControlUserId
-
--- 현재 플레이어가 호스트인지 확인
-function IsHost()
-    return hostId == Player.Mine.UserID
-end
-```
-
-#### 호스트 전환 처리
-```lua
-function FindHost()
-    isHost = SyncView.IsMine
-    HostId = SyncView.MotherObject.ControlUserId
-
-    if isHost then
-        Room.SetRoomProp("Lobby_HostId", HostId)
-        UI.ToastMessage("새로운 방장이 되었습니다.")
-    end
-end
-```
-
-### Room 이벤트 핸들러
-
-```lua
--- 플레이어 입장
----@param userData UserData
-function onRoomUserJoined(userData)
-    local playerId = userData.userId
-    Debug.Log("플레이어 입장: " .. playerId)
-end
-
--- 플레이어 퇴장
----@param userData UserData
-function onUserLeaveRoom(userData)
-    local playerId = userData.userId
-    Debug.Log("플레이어 퇴장: " .. playerId)
-end
-
--- SyncView 초기화 완료
-function onSyncViewInitialized()
-    -- 네트워크 동기화 시작
-end
-```
-
----
-
-## 데이터 인코딩/디코딩 유틸리티
-
-### 타입별 인코딩
-```lua
-local encoder = ImportLuaScript(RoomPropEncoder)
-
--- Boolean
-local encoded = encoder.EncodeBoolean(true)  -- "true"
-local decoded = encoder.DecodeBoolean("true")  -- true
-
--- Integer
-local encoded = encoder.EncodeInteger(100)  -- "100"
-local decoded = encoder.DecodeInteger("100")  -- 100
-
--- String List
-local encoded = encoder.EncodeStringList({"a", "b", "c"})  -- "a,b,c"
-local decoded = encoder.DecodeStringList("a,b,c")  -- {"a", "b", "c"}
-
--- Boolean List
-local encoded = encoder.EncodeBooleanList({true, false, true})
-local decoded = encoder.DecodeBooleanList("true,false,true")
-```
-
-### 커스텀 데이터 구조 인코딩
-```lua
--- 카드 정보
-local cardEncoded = encoder.EncodeRoomPropCardInfo({ type = 1, diseaseAmount = 50 })
-local cardDecoded = encoder.DecodeRoomPropCardInfo(cardEncoded)
-
--- 동물 정보 (레벨별 수량)
-local animalEncoded = encoder.EncodeRoomPropAnimalInfo({ Lv1Count = 1, Lv2Count = 0, Lv3Count = 0 })
-local animalDecoded = encoder.DecodeRoomPropAnimalInfo(animalEncoded)
-
--- 도구 정보
-local toolEncoded = encoder.EncodeRoomPropToolInfo({ fragmentCount = 3, IsPurchased = false })
-local toolDecoded = encoder.DecodeRoomPropToolInfo(toolEncoded)
-```
-
----
-
-## 이벤트 콜백 시스템 (Lua 내부)
-
-### EventCallback 모듈
-```lua
-local Event = ImportLuaScript(EventCallback)
-
--- 이벤트 등록
-Event.registerEvent("onGameStart", function()
-    Debug.Log("게임 시작!")
-end)
-
--- 이벤트 발생
-Event.invoke("onGameStart")
-Event.invoke("onScoreUpdate", 100, "bonus")
-
--- 이벤트 해제
-Event.unregisterEvent("onGameStart", handler)
-
--- 모든 이벤트 초기화
-Event.clearEvent()
-
--- 특정 이벤트만 초기화
-Event.clearEventWithName("onGameStart")
-```
-
----
-
-## Player API
-
-### 현재 플레이어 정보
-```lua
--- 기본 정보
-local myUserId = Player.Mine.UserID        -- 유저 ID
-local myNickname = Player.Mine.Nickname    -- 닉네임
-local playMode = Player.Mine.PlayMode      -- "PC" | "XR" | "Mobile"
-
--- 플레이어 데이터 테이블 가져오기
-local data = Player.Mine.GetPlayerData()
--- data.nickname, data.userId, data.userTag
-
--- 프로필 이미지 비동기 로드
-Player.Mine.GetPlayerProfileImage(function(isSuccess, texture)
-    if isSuccess then
-        -- texture 사용
-    end
-end)
-```
-
-### 캐릭터 컨트롤
-```lua
--- Transform 접근
-local head = Player.Mine.CharacterHead           -- 머리 Transform
-local rightHand = Player.Mine.CharacterRightHand -- 오른손 Transform
-local leftHand = Player.Mine.CharacterLeftHand   -- 왼손 Transform
-
--- Animator 접근
-local animator = Player.Mine.CharacterAnimator
-local controller = Player.Mine.CharacterAnimatorController
-
--- CharacterController 접근
-local cc = Player.Mine.CharacterController
-```
-
-### 이동 제어
-```lua
--- 이동 잠금
-Player.Mine.CharacterMoveLock = true   -- 이동/회전 잠금
-Player.Mine.CharacterMoveLock = false  -- 잠금 해제
-
--- 속도 조절
-Player.Mine.MultiplyPlayerSpeed(2.0)   -- 2배 속도 (범위: 0.01 ~ 5)
-Player.Mine.ResetPlayerSpeed()         -- 속도 초기화
-
--- 입력 추가
-Player.Mine.AddMoveInput(Vector2(1, 0))  -- 이동 입력
-Player.Mine.AddViewInput(Vector2(0, 1))  -- 시선 입력
-
--- 순간이동
-Player.Mine.TeleportPlayer(Vector3(0, 0, 0), Quaternion.identity)
-
--- 카메라 잠금
--- VivenCameraLockMode: None (해제), Lock (잠금), HardLocked (강제 잠금)
-Player.Mine.SetCameraLock(VivenCameraLockMode.Lock)
-Player.Mine.SetCameraLock(VivenCameraLockMode.None)       -- 잠금 해제
-Player.Mine.SetCameraLock(VivenCameraLockMode.HardLocked) -- 강제 잠금
-```
-
-### 상호작용 제어
-```lua
--- 앉기
-local sittable = targetObject:GetComponent("VivenSittable")
-Player.Mine.Sit(sittable)
-
--- 잡기 시도 (비동기 - Task<bool> 반환)
--- 파라미터: (grabbable, isLeft, isForce, interpolation)
--- isLeft: 왼손 여부 (기본값: false = 오른손)
--- isForce: 기존에 잡고있는 모듈을 놓게 할지 여부 (기본값: false)
--- interpolation: Transform Interpolation 적용 (기본값: GrabInterpolation.All)
-local grabbable = targetObject:GetComponent("VivenGrabbableModule")
-local success = Player.Mine.TryGrab(grabbable, false, false, GrabInterpolation.All)
-
--- 모든 상호작용 종료
-Player.Mine.EndAllInteractions()
-
--- 아바타 변경 (프롬프트 표시)
-Player.Mine.ChangeAvatar("avatar-uuid-here")
-```
-
-### PlayerInfoService
-```lua
--- 플레이어 이름 조회
-local playerName = PlayerInfoService.GetName(playerId)
-```
-
----
-
-## UI API
-
-### 윈도우 제어
-```lua
--- 시스템 윈도우 열기
-UI.OpenHomeWindow()      -- 홈 윈도우
-UI.OpenRoomWindow()      -- 방 윈도우
-UI.OpenAvatarWindow()    -- 아바타 윈도우
-UI.OpenObjectWindow()    -- 오브젝트 윈도우
-UI.OpenFriendWindow()    -- 친구 윈도우
-UI.OpenSettingWindow()   -- 설정 윈도우
-
--- 모든 윈도우 닫기
-UI.CloseAllWindow()
-```
-
-### 독(Dock) 제어
-```lua
-UI.OpenDock()   -- 독 열기
-UI.CloseDock()  -- 독 닫기
-```
-
-### 토스트 메시지
-```lua
--- 일반 메시지
-UI.ToastMessage("메시지 내용")
-UI.ToastMessage("메시지 내용", 5.0)  -- 5초간 표시
-
--- 경고 메시지
-UI.ToastWarningMessage("경고 메시지")
-UI.ToastWarningMessage("경고 메시지", 5.0)
-```
-
-### 페이드 효과
-```lua
--- 페이드 인 (화면이 밝아짐)
-UI.FadeIn(duration, function()
-    Debug.Log("페이드 인 완료")
-end)
-
--- 페이드 아웃 (화면이 어두워짐)
-UI.FadeOut(duration, function()
-    Debug.Log("페이드 아웃 완료")
-end, true)  -- showBackgroundImage
-```
-
----
-
-## ScreenRecording API (화면 녹화)
-
-PC 모드에서 화면과 오디오를 녹화하는 기능입니다. 내부적으로 AVPro Movie Capture 플러그인과 ffmpeg를 사용합니다.
-
-### 아키텍처
-```
-SDK API (Lua)
-    ↓
-ScreenRecording (TwentyOz.VivenSDK)
-    ↓
-VivenScreenCaptureManager (관리자)
-    ↓
-CaptureFromScreen (AVPro Movie Capture)
-    ↓
-ffmpeg.exe (비디오 인코딩)
-```
-
-### 기본 사용법
-```lua
--- 녹화 시작
-ScreenRecording.StartRecording()
-
--- 녹화 중단 (파일 브라우저로 저장 경로 선택)
-ScreenRecording.StopRecording()
-
--- 일시정지
-ScreenRecording.PauseRecording()
-
--- 재개
-ScreenRecording.ResumeRecording()
-```
-
-### 프레임 레이트 설정
-```lua
--- 현재 프레임 레이트 확인
-local fps = ScreenRecording.GetFrameRate()
-
--- 프레임 레이트 설정 (기본값: 30fps)
-ScreenRecording.SetFrameRate(60)
-```
-
-### 저장 경로 설정
-```lua
--- 저장 경로와 파일명을 미리 지정하면 파일 브라우저 생략
-ScreenRecording.SetOutputPath("C:/Videos")
-ScreenRecording.SetOutputFileName("MyRecording")
-ScreenRecording.StartRecording()
-
--- 현재 설정 확인
-local path = ScreenRecording.GetOutputPath()
-local fileName = ScreenRecording.GetOutputFileName()
-
--- 경로 초기화 (녹화 완료 후 자동 호출됨)
-ScreenRecording.ClearOutputPaths()
-```
-
-### 오디오 입력 장치 설정
-```lua
--- 현재 오디오 입력 장치 확인
-local currentDevice = ScreenRecording.GetCurrentAudioInputDevice()
-
--- 오디오 입력 장치 변경
--- 주의: Loopback 장치 사용 권장 (FMOD 오디오 녹음을 위해)
-ScreenRecording.SetAudioInputDevice("장치명")
-```
-
-### 녹화 설정 상세
-
-| 설정 | 기본값 | 설명 |
-|------|--------|------|
-| 프레임 레이트 | 30 fps | 1~120 fps 범위 |
-| 출력 형식 | MP4 (H.264) | ffmpeg으로 인코딩 |
-| 오디오 소스 | Microphone (Loopback) | 시스템 오디오 캡처 |
-| 임시 저장 위치 | OS 동영상 폴더 | MyVideos/Viven/ |
-
-### 저장 프로세스
-```
-1. 녹화 시작 → OS 동영상 폴더에 임시 저장
-2. 녹화 종료 → StopRecording() 호출
-3. 경로 미지정 시 → 파일 브라우저로 최종 경로 선택
-4. 경로 지정 시 → 지정된 경로로 직접 저장
-5. 임시 파일 → 최종 위치로 이동 (복사 아님)
-```
-
-### 제약사항
-
-**플랫폼 제한**:
-- **PC 모드 전용**: XR/Mobile 모드에서는 작동하지 않음
-- 플레이 모드 확인: `Player.Mine.PlayMode == "PC"`
-
-**오디오 제약**:
-- FMOD 사운드는 Unity AudioListener를 사용하지 않음
-- **Loopback 장치 필수**: 시스템 전체 오디오를 녹음
-- 마이크 입력도 함께 녹음됨
-
-### 사용 예제
-```lua
-local isRecording = false
-
-function ToggleRecording()
-    if isRecording then
-        ScreenRecording.StopRecording()
-        UI.ToastMessage("녹화가 종료되었습니다.")
-    else
-        -- PC 모드 확인
-        if Player.Mine.PlayMode ~= "PC" then
-            UI.ToastWarningMessage("PC 모드에서만 녹화할 수 있습니다.")
-            return
-        end
-
-        -- 60fps로 녹화 시작
-        ScreenRecording.SetFrameRate(60)
-        ScreenRecording.StartRecording()
-        UI.ToastMessage("녹화가 시작되었습니다.")
-    end
-    isRecording = not isRecording
-end
-
--- 특정 경로에 자동 저장
-function StartAutoSaveRecording()
-    ScreenRecording.SetOutputPath("C:/MyProject/Recordings")
-    ScreenRecording.SetOutputFileName("Session_" .. os.date("%Y%m%d_%H%M%S"))
-    ScreenRecording.StartRecording()
-end
-```
-
-### 기술 스택
-- **AVPro Movie Capture v5.3.3**: 화면/오디오 캡처 플러그인
-- **ffmpeg.exe**: 비디오 인코딩 (H.264/H.265)
-- **SimpleFileBrowser**: 파일 저장 경로 선택 UI
-
----
-
-## 타입 정의 패턴 (def.lua)
-
-### 타입 정의 파일 작성
-```lua
----@meta
-
----@class MyDataType
----@field id string
----@field name string
----@field value int
----@field isActive boolean
-MyDataType = {}
-
----@class PlayerState
----@field playerId string
----@field score integer
----@field inventory table<string, int>
-PlayerState = {}
-```
-
-### 복잡한 데이터 구조 정의
-```lua
----@class NetworkPlayer
----@field id string
----@field isInGame boolean
----@field Mana int
----@field Debt int
----@field Inventory table<string, int>
----@field Card {type: int, amount: int} | nil
-NetworkPlayer = {}
-
----@class GameState
----@field currentRound int
----@field isStarted boolean
----@field players table<string, NetworkPlayer>
-GameState = {}
-```
-
----
-
-## 게임 상태 머신 패턴
-
-### 상태 기반 게임 루프
-```lua
----@alias GameState "Lobby" | "Playing" | "Paused" | "Finished"
-
----@type GameState
-local state = "Lobby"
-
-function SetState(newState)
-    state = newState
-    Room.SetRoomProp("Host_State", newState)
-end
-
-function GameLoop()
-    while state ~= "Finished" do
-        if state == "Lobby" then
-            -- 로비 처리
-        elseif state == "Playing" then
-            -- 게임 진행
-        elseif state == "Paused" then
-            -- 일시정지
-        end
-        coroutine.yield(WaitForEndOfFrame())
-    end
-end
-```
-
----
-
-## 슬래시 커맨드
-
-- `/viven:init` - 새 Viven 오브젝트 초기화
-- `/viven:lua-script` - Lua 스크립트 생성
-- `/viven:grabbable` - Grabbable 오브젝트 설정
-- `/viven:component` - 컴포넌트 추가 가이드
-- `/viven:network` - 네트워크 동기화 설정
-- `/viven:step` - IStep 기반 게임 플로우 생성
-- `/viven:docs [topic]` - 온라인 문서 조회
-- `/viven:troubleshoot` - 문제 해결 가이드
-- `/viven:rpc` - RPC 기반 멀티플레이어 시스템 설정
-- `/viven:room` - Room 속성 및 이벤트 가이드
-- `/viven:host-client` - Host-Client 아키텍처 가이드
-- `/viven:recording` - 화면 녹화 시스템 가이드
-
----
-
-## 필수 패키지 의존성
+## 필수 패키지
 
 ```
-com.unity.xr.management: 4.5.0+
 com.unity.xr.openxr: 1.14.0+
 com.unity.xr.hands: 1.5.0+
 com.unity.xr.interaction.toolkit: 3.0.7+
-com.unity.render-pipelines.universal: 17.0.4+
 com.unity.inputsystem: 1.13.1+
-com.unity.timeline: 1.8.7+
 ```

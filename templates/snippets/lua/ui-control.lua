@@ -270,3 +270,15 @@ function ProgressToast(current, total, prefix)
     ShowToast(prefix .. ": " .. current .. "/" .. total .. " (" .. percent .. "%)")
 end
 --endregion
+
+--region Deprecated APIs (2025-12)
+
+--- [DEPRECATED] UI 모드 설정
+--- @deprecated SetUIMode는 지원이 중단되었습니다.
+---@param activeUIMode boolean 활성화/비활성화 여부
+function SetUIMode(activeUIMode)
+    Debug.LogWarning("[UIControl] SetUIMode는 지원이 중단되었습니다 (deprecated).")
+    -- 호환성을 위해 호출은 유지하지만 경고 출력
+    UI.SetUIMode(activeUIMode)
+end
+--endregion

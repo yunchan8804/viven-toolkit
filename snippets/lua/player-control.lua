@@ -328,3 +328,69 @@ function ChangeAvatar(avatarId)
     Debug.Log("[PlayerControl] 아바타 변경 요청: " .. avatarId)
 end
 --endregion
+
+--region Input Control (2025-12 신규)
+
+--- 캐릭터 이동 입력 추가
+---@param move Vector2 이동 벡터 (x: 좌우, y: 전후)
+function AddMoveInput(move)
+    Player.Mine.AddMoveInput(move)
+end
+
+--- 캐릭터 View 입력 추가
+---@param view Vector2 View 벡터 (카메라 회전)
+function AddViewInput(view)
+    Player.Mine.AddViewInput(view)
+end
+
+--- 이동 입력 (개별 좌표)
+---@param x number 좌우 이동 (-1 ~ 1)
+---@param y number 전후 이동 (-1 ~ 1)
+function AddMoveInputXY(x, y)
+    local move = Vector2(x, y)
+    Player.Mine.AddMoveInput(move)
+end
+
+--- View 입력 (개별 좌표)
+---@param x number 좌우 회전
+---@param y number 상하 회전
+function AddViewInputXY(x, y)
+    local view = Vector2(x, y)
+    Player.Mine.AddViewInput(view)
+end
+--endregion
+
+--region Character Components (2025-12 신규)
+
+--- 캐릭터 컨트롤러 가져오기
+---@return CharacterController
+function GetCharacterController()
+    return Player.Mine.CharacterController
+end
+
+--- 캐릭터 Runtime Animator Controller 가져오기
+---@return RuntimeAnimatorController
+function GetAnimatorController()
+    return Player.Mine.CharacterAnimatorController
+end
+--endregion
+
+--region Emote (2025-12 업데이트)
+
+--- [DEPRECATED] 이모트 재생
+--- @deprecated PlayEmote는 SDKCustomAnimationModule 사용을 권장합니다.
+---@param animationClip AnimationClip 재생할 애니메이션 클립
+---@param firstPosition boolean 1인칭 모드 여부 (기본: false)
+function PlayEmote(animationClip, firstPosition)
+    Debug.LogWarning("[PlayerControl] PlayEmote는 deprecated되었습니다. SDKCustomAnimationModule 사용을 권장합니다.")
+    firstPosition = firstPosition or false
+    Player.Mine.PlayEmote(animationClip, firstPosition)
+end
+
+--- 이모트 중지
+---@param animationClip AnimationClip 중지할 애니메이션 클립 (nil이면 현재 이모트 중지)
+function StopEmote(animationClip)
+    Player.Mine.StopEmote(animationClip)
+    Debug.Log("[PlayerControl] 이모트 중지")
+end
+--endregion
